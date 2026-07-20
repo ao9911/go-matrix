@@ -1,0 +1,12 @@
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# Mac
+.DS_Store
