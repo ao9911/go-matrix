@@ -10,3 +10,6 @@ vendor/
 
 # Mac
 .DS_Store
+
+# claude
+.claude/

@@ -21,6 +21,7 @@ type Config struct {
 	MultiFile bool   // 多文件模式根据日志级别生成文件
 }
 
+// globalLogger is a global logger instance .
 var globalLogger atomic.Pointer[zap.SugaredLogger]
 
 func init() {
