@@ -7,14 +7,16 @@ import (
 	"sync"
 	"time"
 
+	recoverymw "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
-	xgprc "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 
 	"github.com/ao9911/go-matrix/log"
 	"github.com/ao9911/go-matrix/util/xtime"
@@ -36,38 +38,66 @@ type Server struct {
 	conf  *ServerConfig
 	mutex sync.RWMutex
 
-	server       *xgprc.Server
-	healthServer *health.Server
-	interceptor  []xgprc.UnaryServerInterceptor
+	server            *grpc.Server
+	healthServer      *health.Server
+	interceptor       []grpc.UnaryServerInterceptor
+	streamInterceptor []grpc.StreamServerInterceptor
+	opts              []grpc.ServerOption
 }
 
-func NewServer(c *ServerConfig, opts ...xgprc.ServerOption) (s *Server, err error) {
-	s = &Server{}
-	if err := s.configuration(c); err != nil {
-		panic("grpc config error")
+func NewServer(c *ServerConfig, opts ...grpc.ServerOption) *Server {
+	s := &Server{
+		opts: opts,
 	}
-	kp := xgprc.KeepaliveParams(keepalive.ServerParameters{
+	if err := s.configuration(c); err != nil {
+		log.Errorf("grpc config error: %v", err)
+		return nil
+	}
+	return s
+}
+
+func (s *Server) buildServer() {
+	kp := grpc.KeepaliveParams(keepalive.ServerParameters{
 		MaxConnectionIdle:     15 * time.Second, // If a client is idle for 15 seconds, send a GOAWAY
 		MaxConnectionAge:      30 * time.Second, // If any connection is alive for more than 30 seconds, send a GOAWAY
 		MaxConnectionAgeGrace: 5 * time.Second,  // Allow 5 seconds for pending RPCs to complete before forcibly closing connections
 		Time:                  5 * time.Second,  // Ping the client if it is idle for 5 seconds to ensure the connection is still active
 		Timeout:               1 * time.Second,  // Wait 1 second for the ping ack before assuming the connection is dead
 	})
-	opts = append(opts, kp)
-	kaep := xgprc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+	kaep := grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 		MinTime:             5 * time.Second, // If a client pings more than once every 5 seconds, terminate the connection
 		PermitWithoutStream: true,            // Allow pings even when there are no active streams
 	})
-	opts = append(opts, kaep)
-	s.server = xgprc.NewServer(opts...)
+
+	recoveryHandler := func(p any) error {
+		log.Errorf("grpc server panic recovered: %v", p)
+		return status.Errorf(codes.Internal, "internal server error")
+	}
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		recoverymw.UnaryServerInterceptor(recoverymw.WithRecoveryHandler(recoveryHandler)),
+	}
+	unaryInterceptors = append(unaryInterceptors, s.interceptor...)
+
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		recoverymw.StreamServerInterceptor(recoverymw.WithRecoveryHandler(recoveryHandler)),
+	}
+	streamInterceptors = append(streamInterceptors, s.streamInterceptor...)
+
+	opts := append(s.opts,
+		kp,
+		kaep,
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+	)
+
+	s.server = grpc.NewServer(opts...)
 	s.healthServer = health.NewServer()
 	healthpb.RegisterHealthServer(s.server, s.healthServer)
-	return
 }
 
 func (s *Server) Start() {
-	var err error
-	l, err := net.Listen("tcp", s.conf.Addr)
+	s.buildServer()
+	l, err := net.Listen(s.conf.Network, s.conf.Addr)
 	if err != nil {
 		err = errors.WithStack(err)
 		log.Errorf("failed to net Listen: %v", err)
@@ -83,11 +113,25 @@ func (s *Server) Start() {
 	}()
 }
 
-func (s *Server) Stop() {
-	s.server.GracefulStop()
+func (s *Server) Stop(ctx context.Context) error {
+	stopped := make(chan struct{})
+	go func() {
+		s.server.GracefulStop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		log.Info("grpc server graceful stop completed")
+		return nil
+	case <-ctx.Done():
+		log.Warn("grpc server graceful stop timeout, forcing stop")
+		s.server.Stop()
+		return ctx.Err()
+	}
 }
 
-func (s *Server) Use(interceptors ...xgprc.UnaryServerInterceptor) *Server {
+func (s *Server) Use(interceptors ...grpc.UnaryServerInterceptor) *Server {
 	s.interceptor = append(s.interceptor, interceptors...)
 	return s
 }
@@ -96,7 +140,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	return s.server.Serve(lis)
 }
 
-func (s *Server) Server() *xgprc.Server {
+func (s *Server) Server() *grpc.Server {
 	return s.server
 }
 

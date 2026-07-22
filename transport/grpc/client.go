@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/timeout"
 	"github.com/mercari/go-circuitbreaker"
 	"google.golang.org/grpc"
@@ -21,7 +20,6 @@ import (
 type ClientConfig struct {
 	Addr           string
 	LoadBalancing  string
-	Timeout        xtime.Duration
 	RequestTimeout xtime.Duration
 	Circuitbreaker Circuitbreaker
 }
@@ -39,10 +37,6 @@ func NewRPCClient(cfg *ClientConfig) *grpc.ClientConn {
 		cfg.LoadBalancing = fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, roundrobin.Name)
 	}
 
-	if cfg.Timeout <= 0 {
-		cfg.Timeout = xtime.Duration(time.Second)
-	}
-
 	if cfg.RequestTimeout <= 0 {
 		cfg.RequestTimeout = xtime.Duration(time.Second)
 	}
@@ -58,6 +52,7 @@ func NewRPCClient(cfg *ClientConfig) *grpc.ClientConn {
 	if cfg.Circuitbreaker.HalfOpenMaxSuccesses == 0 {
 		cfg.Circuitbreaker.HalfOpenMaxSuccesses = 10
 	}
+
 	cb := circuitbreaker.New(
 		circuitbreaker.WithFailOnContextCancel(true),
 		circuitbreaker.WithFailOnContextDeadline(true),
@@ -70,28 +65,21 @@ func NewRPCClient(cfg *ClientConfig) *grpc.ClientConn {
 			log.Infof("state changed from %s to %s\n", from, to)
 		}),
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout))
-	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, cfg.Addr, grpc.WithTransportCredentials(
-		insecure.NewCredentials()),
+	conn, err := grpc.NewClient(cfg.Addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(cfg.LoadBalancing),
-		grpc.WithBlock(),
-		grpc.WithUnaryInterceptor(
-			grpc_middleware.ChainUnaryClient(
-				UnaryClientInterceptor(
-					cb,
-					func(ctx context.Context, method string, req interface{}) {
-						log.Info("[Client] Circuit breaker is open.\n")
-					},
-				),
-				timeout.UnaryClientInterceptor(time.Duration(cfg.RequestTimeout)),
-			),
+		grpc.WithChainUnaryInterceptor(
+			UnaryClientInterceptor(cb, func(ctx context.Context, method string, req any) {
+				log.Infof("[Client] Circuit breaker is open for method %s", method)
+			}),
+			timeout.UnaryClientInterceptor(time.Duration(cfg.RequestTimeout)),
 		),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                10 * time.Second,
 			Timeout:             500 * time.Millisecond,
-			PermitWithoutStream: true}),
+			PermitWithoutStream: true,
+		}),
 	)
 
 	if err != nil {
@@ -101,16 +89,15 @@ func NewRPCClient(cfg *ClientConfig) *grpc.ClientConn {
 	return conn
 }
 
-type OpenStateHandler func(ctx context.Context, method string, req interface{})
+type OpenStateHandler func(ctx context.Context, method string, req any)
 
 func UnaryClientInterceptor(cb *circuitbreaker.CircuitBreaker, handler OpenStateHandler) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		_, err := cb.Do(ctx, func() (interface{}, error) {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		_, err := cb.Do(ctx, func() (any, error) {
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err != nil {
 				return nil, err
 			}
-
 			return nil, nil
 		})
 
