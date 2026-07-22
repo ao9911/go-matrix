@@ -14,6 +14,7 @@ func init() {
 	Init(cfg)
 }
 
+// go test -v -test.run TestDebug
 func TestDebug(t *testing.T) {
 	Debug("hello debug")
 	Debugf("hello number=%d", 100)

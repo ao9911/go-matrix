@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
-	xhttp "net/http"
+	"net/http"
 	"strings"
 	"time"
 
@@ -39,7 +39,7 @@ type Config struct {
 
 type HttpClient struct {
 	conf       *Config
-	client     *xhttp.Client
+	client     *http.Client
 	retryCount int
 	retrier    retry.Retriable
 }
@@ -50,8 +50,8 @@ func NewHTTPClient(c *Config) *HttpClient {
 		Timeout:   time.Duration(c.Dial),
 		KeepAlive: time.Duration(c.KeepAlive),
 	}
-	transport := &xhttp.Transport{
-		Proxy:               xhttp.ProxyFromEnvironment,
+	transport := &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
 		DialContext:         dialer.DialContext,
 		MaxConnsPerHost:     c.MaxConns,
 		MaxIdleConnsPerHost: c.MaxIdle,
@@ -62,7 +62,7 @@ func NewHTTPClient(c *Config) *HttpClient {
 	bo := backoff.NewConstantBackoff(c.BackoffInterval)
 	return &HttpClient{
 		conf: c,
-		client: &xhttp.Client{
+		client: &http.Client{
 			Transport: transport,
 		},
 		retryCount: c.RetryCount,
@@ -81,10 +81,10 @@ func (c *HttpClient) SetRetrier(retrier retry.Retriable) {
 }
 
 // Get makes a HTTP GET request to provided URL with context passed in
-func (c *HttpClient) Get(ctx context.Context, url string, headers xhttp.Header, res interface{}) (err error) {
+func (c *HttpClient) Get(ctx context.Context, url string, headers http.Header, res interface{}) (err error) {
 	ctx, span := trace.StartSpan(ctx, "httpclient Get")
 	defer span.End()
-	request, err := xhttp.NewRequest(xhttp.MethodGet, url, nil)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return errors.Wrap(err, "GET - request creation failed")
 	}
@@ -99,15 +99,15 @@ func (c *HttpClient) Get(ctx context.Context, url string, headers xhttp.Header, 
 }
 
 // Post makes a HTTP POST request to provided URL with context passed in
-func (c *HttpClient) Post(ctx context.Context, url, contentType string, headers xhttp.Header, param, res interface{}) (err error) {
+func (c *HttpClient) Post(ctx context.Context, url, contentType string, headers http.Header, param, res interface{}) (err error) {
 	ctx, span := trace.StartSpan(ctx, "httpclient Post")
 	defer span.End()
-	request, err := xhttp.NewRequest(xhttp.MethodPost, url, reqBody(contentType, param))
+	request, err := http.NewRequest(http.MethodPost, url, reqBody(contentType, param))
 	if err != nil {
 		return errors.Wrap(err, "POST - request creation failed")
 	}
 	if headers == nil {
-		headers = make(xhttp.Header)
+		headers = make(http.Header)
 	}
 	headers.Set("Content-Type", contentType)
 	request.Header = headers
@@ -122,16 +122,16 @@ func (c *HttpClient) Post(ctx context.Context, url, contentType string, headers 
 }
 
 // Put makes a HTTP PUT request to provided URL with context passed in
-func (c *HttpClient) Put(ctx context.Context, url, contentType string, headers xhttp.Header, param, res interface{}) (err error) {
+func (c *HttpClient) Put(ctx context.Context, url, contentType string, headers http.Header, param, res interface{}) (err error) {
 	ctx, span := trace.StartSpan(ctx, "httpclient Put")
 	defer span.End()
-	request, err := xhttp.NewRequest(xhttp.MethodPut, url, reqBody(contentType, param))
+	request, err := http.NewRequest(http.MethodPut, url, reqBody(contentType, param))
 	if err != nil {
 		return errors.Wrap(err, "PUT - request creation failed")
 	}
 
 	if headers == nil {
-		headers = make(xhttp.Header)
+		headers = make(http.Header)
 	}
 	headers.Set("Content-Type", contentType)
 	request.Header = headers
@@ -146,16 +146,16 @@ func (c *HttpClient) Put(ctx context.Context, url, contentType string, headers x
 }
 
 // Patch makes a HTTP PATCH request to provided URL with context passed in
-func (c *HttpClient) PATCH(ctx context.Context, url, contentType string, headers xhttp.Header, param, res interface{}) (err error) {
+func (c *HttpClient) PATCH(ctx context.Context, url, contentType string, headers http.Header, param, res interface{}) (err error) {
 	ctx, span := trace.StartSpan(ctx, "httpclient Patch")
 	defer span.End()
-	request, err := xhttp.NewRequest(xhttp.MethodPatch, url, reqBody(contentType, param))
+	request, err := http.NewRequest(http.MethodPatch, url, reqBody(contentType, param))
 	if err != nil {
 		return errors.Wrap(err, "PATCH - request creation failed")
 	}
 
 	if headers == nil {
-		headers = make(xhttp.Header)
+		headers = make(http.Header)
 	}
 	headers.Set("Content-Type", contentType)
 	request.Header = headers
@@ -170,16 +170,16 @@ func (c *HttpClient) PATCH(ctx context.Context, url, contentType string, headers
 }
 
 // Delete makes a HTTP DELETE request to provided URL with context passed in
-func (c *HttpClient) Delete(ctx context.Context, url, contentType string, headers xhttp.Header, param, res interface{}) (err error) {
+func (c *HttpClient) Delete(ctx context.Context, url, contentType string, headers http.Header, param, res interface{}) (err error) {
 	ctx, span := trace.StartSpan(ctx, "httpclient Delete")
 	defer span.End()
-	request, err := xhttp.NewRequest(xhttp.MethodDelete, url, nil)
+	request, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return errors.Wrap(err, "DELETE - request creation failed")
 	}
 
 	if headers == nil {
-		headers = make(xhttp.Header)
+		headers = make(http.Header)
 	}
 	headers.Set("Content-Type", contentType)
 	request.Header = headers
@@ -194,7 +194,7 @@ func (c *HttpClient) Delete(ctx context.Context, url, contentType string, header
 }
 
 // Do makes an HTTP request with the native `http.Do` interface and context passed in
-func (c *HttpClient) Do(ctx context.Context, req *xhttp.Request, res interface{}) (err error) {
+func (c *HttpClient) Do(ctx context.Context, req *http.Request, res interface{}) (err error) {
 	for i := 0; i <= c.retryCount; i++ {
 		if err = c.request(ctx, req, res); err != nil {
 			backoffTime := c.retrier.NextInterval(i)
@@ -206,9 +206,9 @@ func (c *HttpClient) Do(ctx context.Context, req *xhttp.Request, res interface{}
 	return
 }
 
-func (c *HttpClient) request(ctx context.Context, req *xhttp.Request, res interface{}) (err error) {
+func (c *HttpClient) request(ctx context.Context, req *http.Request, res interface{}) (err error) {
 	var (
-		response *xhttp.Response
+		response *http.Response
 		bs       []byte
 		cancel   func()
 	)
@@ -221,7 +221,7 @@ func (c *HttpClient) request(ctx context.Context, req *xhttp.Request, res interf
 		return
 	}
 	defer response.Body.Close()
-	if response.StatusCode >= xhttp.StatusInternalServerError {
+	if response.StatusCode >= http.StatusInternalServerError {
 		err = errors.Wrap(err, fmt.Sprintf("response.StatusCode %d", response.StatusCode))
 		return
 	}

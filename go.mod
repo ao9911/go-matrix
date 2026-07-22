@@ -5,7 +5,6 @@ go 1.25.1
 require (
 	github.com/bytedance/sonic v1.15.2
 	github.com/cenkalti/backoff/v5 v5.0.3
-	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/mercari/go-circuitbreaker v0.0.2
 	github.com/pkg/errors v0.9.1
