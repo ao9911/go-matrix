@@ -3,6 +3,8 @@ module github.com/ao9911/go-matrix
 go 1.25.1
 
 require (
+	contrib.go.opencensus.io/exporter/jaeger v0.2.1
+	contrib.go.opencensus.io/exporter/zipkin v0.1.2
 	github.com/bytedance/sonic v1.15.2
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
@@ -11,9 +13,12 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/mercari/go-circuitbreaker v0.0.2
+	github.com/nsqio/go-nsq v1.1.0
+	github.com/openzipkin/zipkin-go v0.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/extra/redisotel/v9 v9.21.0
 	github.com/redis/go-redis/v9 v9.21.0
+	github.com/segmentio/kafka-go v0.4.51
 	go.mongodb.org/mongo-driver v1.17.9
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.28.0
@@ -61,10 +66,12 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/redis/go-redis/extra/rediscmd/v9 v9.21.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
+	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.2.0 // indirect
@@ -82,4 +89,5 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
+	google.golang.org/api v0.29.0 // indirect
 )
