@@ -3,15 +3,14 @@ package log
 import (
 	"context"
 	"io"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Config is log config .
@@ -20,6 +19,19 @@ type Config struct {
 	AppName   string // 应用名称
 	Debug     bool   // 是否开启Debug模式
 	MultiFile bool   // 多文件模式根据日志级别生成文件
+}
+
+// globalLogger is a global logger instance .
+var globalLogger atomic.Pointer[zap.SugaredLogger]
+
+func init() {
+	l := zap.New(zapcore.NewTee(
+		zapcore.NewCore(encoder, consoleDebugging, lowPriority)),
+		zap.AddCaller(),
+		zap.Development(),
+		zap.AddCallerSkip(1),
+	).Sugar()
+	globalLogger.Store(l)
 }
 
 // Init initialize a log config .
@@ -33,18 +45,18 @@ func Init(c *Config) {
 	}
 	if c.LogPath != "" {
 		if c.MultiFile {
-			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+"_info.log")), infoLevel))
-			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+"_warn.log")), warnLevel))
-			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+"_error.log")), errorLevel))
-			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+"_fatal.log")), fatalLevel))
+			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+"_info.log"))), infoLevel))
+			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+"_warn.log"))), warnLevel))
+			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+"_error.log"))), errorLevel))
+			cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+"_fatal.log"))), fatalLevel))
 			if c.Debug {
-				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+"_debug.log")), debugLevel))
+				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+"_debug.log"))), debugLevel))
 			}
 		} else {
 			if c.Debug {
-				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+".log")), lowPriority))
+				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+".log"))), lowPriority))
 			} else {
-				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(c.LogPath+c.AppName+".log")), highPriority))
+				cores = append(cores, zapcore.NewCore(encoder, zapcore.AddSync(getWriter(filepath.Join(c.LogPath, c.AppName+".log"))), highPriority))
 			}
 		}
 	}
@@ -78,7 +90,7 @@ func FromContext(ctx context.Context) (string, bool) {
 
 // TimeEncoder time encoder .
 func TimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(strconv.FormatInt(time.Now().Unix(), 10))
+	enc.AppendString(strconv.FormatInt(t.Unix(), 10))
 }
 
 // Debugf log
@@ -182,30 +194,19 @@ func CtxErrorf(ctx context.Context, msg string, args ...interface{}) {
 }
 
 func getWriter(filename string) io.Writer {
-	hook, err := rotatelogs.New(
-		strings.Replace(filename, ".log", "", -1)+"_%Y%m%d%H.log",
-		rotatelogs.WithLinkName(filename),
-		rotatelogs.WithMaxAge(time.Hour*24*7),  // 默认保存时间为7天
-		rotatelogs.WithRotationTime(time.Hour), // 每小时滚动一次存储
-	)
-	if err != nil {
-		panic(err)
+	return &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    100,  // 单个日志文件最大 100 MB
+		MaxAge:     7,    // 默认保存时间为 7 天
+		MaxBackups: 30,   // 最多保留 30 个备份文件
+		Compress:   true, // 开启压缩
 	}
-	return hook
 }
 
 func logger() *zap.SugaredLogger {
-	return (*zap.SugaredLogger)(atomic.LoadPointer(&loggerImpl))
+	return globalLogger.Load()
 }
 
 func setLogger(l *zap.SugaredLogger) {
-	atomic.StorePointer(&loggerImpl, unsafe.Pointer(l))
+	globalLogger.Store(l)
 }
-
-var loggerImpl unsafe.Pointer = unsafe.Pointer(
-	zap.New(zapcore.NewTee(
-		zapcore.NewCore(encoder, consoleDebugging, lowPriority)),
-		zap.AddCaller(),
-		zap.Development(),
-		zap.AddCallerSkip(1),
-	).Sugar())
