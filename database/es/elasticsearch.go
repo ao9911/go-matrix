@@ -93,7 +93,7 @@ func (e *ElasticClient) DeleteIndex(index []string) (*esapi.Response, error) {
 	return res, nil
 }
 
-func (e *ElasticClient) CreateDocument(index, docID, body string) error {
+func (e *ElasticClient) CreateDocument(index, docID, body string) (err error) {
 	res, err := (&esapi.IndexRequest{
 		Index:      index,
 		DocumentID: docID,
@@ -106,7 +106,11 @@ func (e *ElasticClient) CreateDocument(index, docID, body string) error {
 	if res.IsError() {
 		return responseError("create document "+docID, res)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close create document response: %w", closeErr)
+		}
+	}()
 	var result map[string]any
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
 		return fmt.Errorf("decode create document response: %w", err)
@@ -151,7 +155,7 @@ func (e *ElasticClient) UpdateDocumentByQurey(body string) error {
 }
 
 // Query searches an index and decodes the response into result.
-func (e *ElasticClient) Query(index string, query map[string]any, result any) error {
+func (e *ElasticClient) Query(index string, query map[string]any, result any) (err error) {
 	if result == nil {
 		return errors.New("es: nil query result")
 	}
@@ -171,7 +175,11 @@ func (e *ElasticClient) Query(index string, query map[string]any, result any) er
 	if res.IsError() {
 		return responseError("query index "+index, res)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close query response: %w", closeErr)
+		}
+	}()
 	if err := json.NewDecoder(res.Body).Decode(result); err != nil {
 		return fmt.Errorf("decode query response: %w", err)
 	}
@@ -184,10 +192,15 @@ func (e *ElasticClient) Qurey(index string, query map[string]any, result any) er
 }
 
 func responseError(operation string, res *esapi.Response) error {
-	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			return fmt.Errorf("%s: elasticsearch status %s (read body: %v, close body: %v)", operation, res.Status(), err, closeErr)
+		}
 		return fmt.Errorf("%s: elasticsearch status %s (read body: %v)", operation, res.Status(), err)
+	}
+	if closeErr := res.Body.Close(); closeErr != nil {
+		return fmt.Errorf("%s: elasticsearch status %s: %s (close body: %v)", operation, res.Status(), strings.TrimSpace(string(body)), closeErr)
 	}
 	return fmt.Errorf("%s: elasticsearch status %s: %s", operation, res.Status(), strings.TrimSpace(string(body)))
 }

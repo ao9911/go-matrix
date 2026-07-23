@@ -220,7 +220,11 @@ func (c *HttpClient) request(ctx context.Context, req *http.Request, res interfa
 		err = ctx.Err()
 		return
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil && err == nil {
+			err = errors.Wrap(closeErr, "close response body")
+		}
+	}()
 	if response.StatusCode >= http.StatusInternalServerError {
 		err = errors.Wrap(err, fmt.Sprintf("response.StatusCode %d", response.StatusCode))
 		return

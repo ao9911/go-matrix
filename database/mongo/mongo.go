@@ -43,7 +43,8 @@ func NewMongo(c *Config) (client *mongo.Client) {
 	clientOptions.SetHeartbeatInterval(time.Second)
 	clientOptions.SetReadPreference(readpref.SecondaryPreferred())
 	clientOptions.SetReadConcern(readconcern.Local())
-	clientOptions.SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(true)))
+	journal := true
+	clientOptions.SetWriteConcern(&writeconcern.WriteConcern{W: 1, Journal: &journal})
 	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		log.Fatalf("mongo.Connect error %v", err)

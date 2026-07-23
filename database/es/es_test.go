@@ -22,7 +22,11 @@ func TestDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			t.Errorf("close info response: %v", err)
+		}
+	}()
 	if res.IsError() {
 		t.Fatalf("elasticsearch info returned %s", res.Status())
 	}
@@ -71,7 +75,11 @@ func TestCreateIndexResponseOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			t.Errorf("close create index response: %v", err)
+		}
+	}()
 	if _, err := io.ReadAll(res.Body); err != nil {
 		t.Fatalf("successful response body was not readable: %v", err)
 	}

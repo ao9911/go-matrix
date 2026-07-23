@@ -78,7 +78,11 @@ func TestServerServeAndStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRPCClient() error = %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close connection: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
