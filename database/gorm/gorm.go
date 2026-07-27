@@ -14,14 +14,14 @@ import (
 )
 
 type Config struct {
-	DebugMode    bool           `toml:"debug_mode"`
-	DriverName   string         `toml:"driver_name"`
+	DebugMode    bool           `toml:"debugMode"`
+	DriverName   string         `toml:"driverName"`
 	DSN          string         `toml:"dsn"`
-	ReadDSN      []string       `toml:"read_dsn"`
-	MaxIdleConns int            `toml:"max_idle_conns"`
-	MaxOpenConns int            `toml:"max_open_conns"`
-	MaxLifetime  xtime.Duration `toml:"max_lifetime"`
-	MaxIdleTime  xtime.Duration `toml:"max_idle_time"`
+	ReadDSN      []string       `toml:"readDsn"`
+	MaxIdleConns int            `toml:"maxIdleConns"`
+	MaxOpenConns int            `toml:"maxOpenConns"`
+	MaxLifetime  xtime.Duration `toml:"maxLifetime"`
+	MaxIdleTime  xtime.Duration `toml:"maxIdleTime"`
 }
 
 func NewORM(c *Config) (orm *gorm.DB) {
