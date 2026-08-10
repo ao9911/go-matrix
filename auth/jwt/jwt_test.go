@@ -51,7 +51,7 @@ func TestJWT_GeneratePairParseAccessParseRefresh(t *testing.T) {
 	if accessClaims.ExpiresAt == nil || refreshClaims.ExpiresAt == nil {
 		t.Fatal("expected access and refresh expirations")
 	}
-	if !refreshClaims.ExpiresAt.Time.After(accessClaims.ExpiresAt.Time) {
+	if !refreshClaims.ExpiresAt.After(accessClaims.ExpiresAt.Time) {
 		t.Fatalf("expected refresh to expire after access: refresh=%s access=%s", refreshClaims.ExpiresAt.Time, accessClaims.ExpiresAt.Time)
 	}
 
