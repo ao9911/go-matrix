@@ -21,10 +21,10 @@ const (
 // Config defines access and refresh token signing options.
 type Config struct {
 	Issuer        string         `json:"issuer" toml:"issuer"`
-	AccessSecret  string         `json:"access_secret" toml:"access_secret"`
-	RefreshSecret string         `json:"refresh_secret" toml:"refresh_secret"`
-	AccessExpire  xtime.Duration `json:"access_expire" toml:"access_expire"`
-	RefreshExpire xtime.Duration `json:"refresh_expire" toml:"refresh_expire"`
+	AccessSecret  string         `json:"access_secret" toml:"accessSecret"`
+	RefreshSecret string         `json:"refresh_secret" toml:"refreshSecret"`
+	AccessExpire  xtime.Duration `json:"access_expire" toml:"accessExpire"`
+	RefreshExpire xtime.Duration `json:"refresh_expire" toml:"refreshExpire"`
 }
 
 // TokenPair is the generated access/refresh token response.
