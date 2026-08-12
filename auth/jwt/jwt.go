@@ -49,21 +49,21 @@ type JWT struct {
 }
 
 // NewJWT creates a JWT helper from validated config.
-func NewJWT(c *Config) (*JWT, error) {
+func NewJWT(c *Config) *JWT {
 	if c == nil {
-		return nil, errors.New("jwt: nil config")
+		panic("jwt: nil config")
 	}
 	if c.AccessSecret == "" {
-		return nil, errors.New("jwt: empty access secret")
+		panic("jwt: empty access secret")
 	}
 	if c.RefreshSecret == "" {
-		return nil, errors.New("jwt: empty refresh secret")
+		panic("jwt: empty refresh secret")
 	}
 	if c.AccessExpire <= 0 {
-		return nil, errors.New("jwt: invalid access expire")
+		panic("jwt: invalid access expire")
 	}
 	if c.RefreshExpire <= 0 {
-		return nil, errors.New("jwt: invalid refresh expire")
+		panic("jwt: invalid refresh expire")
 	}
 
 	return &JWT{
@@ -72,7 +72,7 @@ func NewJWT(c *Config) (*JWT, error) {
 		accessExpire:  time.Duration(c.AccessExpire),
 		refreshExpire: time.Duration(c.RefreshExpire),
 		issuer:        c.Issuer,
-	}, nil
+	}
 }
 
 // GeneratePair creates access and refresh tokens for the subject.

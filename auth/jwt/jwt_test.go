@@ -7,65 +7,135 @@ import (
 	"github.com/ao9911/go-matrix/util/xtime"
 )
 
-func TestJWT_GeneratePairParseAccessParseRefresh(t *testing.T) {
-	j, err := NewJWT(&Config{
+var (
+	jwtConfig *Config
+	jwtClient *JWT
+)
+
+func init() {
+	jwtConfig = &Config{
 		AccessSecret:  "access-secret",
 		RefreshSecret: "refresh-secret",
 		AccessExpire:  xtime.Duration(time.Minute),
 		RefreshExpire: xtime.Duration(time.Hour),
 		Issuer:        "go-matrix-test",
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	jwtClient = NewJWT(jwtConfig)
+}
 
-	pair, err := j.GeneratePair("user-123")
+// go test -v -test.run TestNewJWT
+func TestNewJWT(t *testing.T) {
+	if jwtClient == nil {
+		t.Fatal("NewJWT() returned nil")
+	}
+	if string(jwtClient.accessSecret) != jwtConfig.AccessSecret {
+		t.Fatalf("access secret = %q, want %q", string(jwtClient.accessSecret), jwtConfig.AccessSecret)
+	}
+	if string(jwtClient.refreshSecret) != jwtConfig.RefreshSecret {
+		t.Fatalf("refresh secret = %q, want %q", string(jwtClient.refreshSecret), jwtConfig.RefreshSecret)
+	}
+	if jwtClient.accessExpire != time.Duration(jwtConfig.AccessExpire) {
+		t.Fatalf("access expire = %s, want %s", jwtClient.accessExpire, time.Duration(jwtConfig.AccessExpire))
+	}
+	if jwtClient.refreshExpire != time.Duration(jwtConfig.RefreshExpire) {
+		t.Fatalf("refresh expire = %s, want %s", jwtClient.refreshExpire, time.Duration(jwtConfig.RefreshExpire))
+	}
+	if jwtClient.issuer != jwtConfig.Issuer {
+		t.Fatalf("issuer = %q, want %q", jwtClient.issuer, jwtConfig.Issuer)
+	}
+}
+
+// go test -v -test.run TestJWT_GeneratePair
+func TestJWT_GeneratePair(t *testing.T) {
+	pair, err := jwtClient.GeneratePair("user-123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pair.AccessToken == "" || pair.RefreshToken == "" {
-		t.Fatal("expected access and refresh tokens")
+	if pair == nil {
+		t.Fatal("GeneratePair() returned nil")
+	}
+	if pair.AccessToken == "" {
+		t.Fatal("expected access token")
+	}
+	if pair.RefreshToken == "" {
+		t.Fatal("expected refresh token")
 	}
 	if pair.AccessToken == pair.RefreshToken {
 		t.Fatal("expected different access and refresh tokens")
 	}
 
-	accessClaims, err := j.ParseAccess(pair.AccessToken)
+	if _, err := jwtClient.GeneratePair(""); err == nil {
+		t.Fatal("expected empty subject error")
+	}
+}
+
+// go test -v -test.run TestJWT_ParseAccess
+func TestJWT_ParseAccess(t *testing.T) {
+	pair := mustGeneratePair(t)
+
+	claims, err := jwtClient.ParseAccess(pair.AccessToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	refreshClaims, err := j.ParseRefresh(pair.RefreshToken)
+	assertClaims(t, claims, "user-123", TokenTypeAccess)
+
+	if _, err := jwtClient.ParseAccess(pair.RefreshToken); err == nil {
+		t.Fatal("expected refresh token to be rejected as access token")
+	}
+}
+
+// go test -v -test.run TestJWT_ParseRefresh
+func TestJWT_ParseRefresh(t *testing.T) {
+	pair := mustGeneratePair(t)
+
+	claims, err := jwtClient.ParseRefresh(pair.RefreshToken)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertClaims(t, claims, "user-123", TokenTypeRefresh)
 
-	if accessClaims.Subject != "user-123" || refreshClaims.Subject != "user-123" {
-		t.Fatalf("unexpected subjects: access=%q refresh=%q", accessClaims.Subject, refreshClaims.Subject)
+	if _, err := jwtClient.ParseRefresh(pair.AccessToken); err == nil {
+		t.Fatal("expected access token to be rejected as refresh token")
 	}
-	if accessClaims.TokenType != TokenTypeAccess || refreshClaims.TokenType != TokenTypeRefresh {
-		t.Fatalf("unexpected token types: access=%q refresh=%q", accessClaims.TokenType, refreshClaims.TokenType)
-	}
-	if accessClaims.Issuer != "go-matrix-test" || refreshClaims.Issuer != "go-matrix-test" {
-		t.Fatalf("unexpected issuers: access=%q refresh=%q", accessClaims.Issuer, refreshClaims.Issuer)
-	}
-	if accessClaims.ExpiresAt == nil || refreshClaims.ExpiresAt == nil {
-		t.Fatal("expected access and refresh expirations")
-	}
-	if !refreshClaims.ExpiresAt.After(accessClaims.ExpiresAt.Time) {
-		t.Fatalf("expected refresh to expire after access: refresh=%s access=%s", refreshClaims.ExpiresAt.Time, accessClaims.ExpiresAt.Time)
-	}
+}
 
-	for _, id := range []string{accessClaims.ID, refreshClaims.ID} {
-		if len(id) != jtiBytes*2 {
-			t.Fatalf("expected %d-char jti, got %q", jtiBytes*2, id)
-		}
-		for _, r := range id {
-			if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
-				t.Fatalf("expected lowercase hex jti, got %q", id)
-			}
-		}
+func mustGeneratePair(t *testing.T) *TokenPair {
+	t.Helper()
+
+	pair, err := jwtClient.GeneratePair("user-123")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if accessClaims.ID == refreshClaims.ID {
-		t.Fatal("expected different access and refresh jti")
+	if pair == nil {
+		t.Fatal("GeneratePair() returned nil")
+	}
+	return pair
+}
+
+func assertClaims(t *testing.T, claims *Claims, subject, tokenType string) {
+	t.Helper()
+
+	if claims == nil {
+		t.Fatal("expected claims")
+	}
+	if claims.Subject != subject {
+		t.Fatalf("subject = %q, want %q", claims.Subject, subject)
+	}
+	if claims.TokenType != tokenType {
+		t.Fatalf("token type = %q, want %q", claims.TokenType, tokenType)
+	}
+	if claims.Issuer != jwtConfig.Issuer {
+		t.Fatalf("issuer = %q, want %q", claims.Issuer, jwtConfig.Issuer)
+	}
+	if claims.ExpiresAt == nil {
+		t.Fatal("expected expiration")
+	}
+	if len(claims.ID) != jtiBytes*2 {
+		t.Fatalf("jti length = %d, want %d", len(claims.ID), jtiBytes*2)
+	}
+	for _, r := range claims.ID {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			t.Fatalf("expected lowercase hex jti, got %q", claims.ID)
+		}
 	}
 }
