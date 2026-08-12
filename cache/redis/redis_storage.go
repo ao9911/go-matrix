@@ -163,6 +163,10 @@ func (rs *RedisStorage) Set(ctx context.Context, key string, value interface{}, 
 	return rs.cmd.Set(ctx, key, value, expiration)
 }
 
+func (rs *RedisStorage) SetBit(ctx context.Context, key string, offset int64, value int) *redis.IntCmd {
+	return rs.cmd.SetBit(ctx, key, offset, value)
+}
+
 func (rs *RedisStorage) SCard(ctx context.Context, key string) *redis.IntCmd {
 	return rs.cmd.SCard(ctx, key)
 }
@@ -269,4 +273,8 @@ func (rs *RedisStorage) Subscribe(ctx context.Context, channels []string) *redis
 
 func (rs *RedisStorage) ZIncrBy(ctx context.Context, key string, increment float64, member string) *redis.FloatCmd {
 	return rs.cmd.ZIncrBy(ctx, key, increment, member)
+}
+
+func (rs *RedisStorage) BitField(ctx context.Context, key string, member string) *redis.IntSliceCmd {
+	return rs.cmd.BitField(ctx, key, member)
 }
