@@ -50,8 +50,7 @@ func NewServer(c *ServerConfig, opts ...grpc.ServerOption) *Server {
 		opts: opts,
 	}
 	if err := s.configuration(c); err != nil {
-		log.Errorf("grpc config error: %v", err)
-		return nil
+		panic(fmt.Sprintf("grpc server configuration error: %v", err))
 	}
 	return s
 }
@@ -95,22 +94,20 @@ func (s *Server) buildServer() {
 	healthpb.RegisterHealthServer(s.server, s.healthServer)
 }
 
-func (s *Server) Start() {
+func (s *Server) Start() error {
 	s.buildServer()
 	l, err := net.Listen(s.conf.Network, s.conf.Addr)
 	if err != nil {
-		err = errors.WithStack(err)
-		log.Errorf("failed to net Listen: %v", err)
-		return
+		return errors.Wrap(err, "failed to net Listen")
 	}
 	reflection.Register(s.server)
 	go func() {
 		log.Infof("grpc server succeed listening at %v", l.Addr())
-		if err := s.server.Serve(l); err != nil {
-			err = errors.WithStack(err)
-			log.Errorf("failed to serve: %v", err)
+		if err := s.server.Serve(l); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			log.Errorf("grpc server serve error: %+v", errors.Wrap(err, "failed to serve"))
 		}
 	}()
+	return nil
 }
 
 func (s *Server) Stop(ctx context.Context) error {
