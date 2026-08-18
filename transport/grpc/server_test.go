@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,28 @@ func TestServerServeAndStop(t *testing.T) {
 	}
 	if err := <-serveErr; err != nil && !errors.Is(err, grpcgo.ErrServerStopped) {
 		t.Fatalf("Serve() error = %v", err)
+	}
+}
+
+func TestServerStartAndStop(t *testing.T) {
+	s := NewServer(&ServerConfig{Addr: "127.0.0.1:0"})
+	if err := s.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.Stop(ctx); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+}
+
+func TestServerStartListenError(t *testing.T) {
+	s := NewServer(&ServerConfig{Network: "bad-network", Addr: "127.0.0.1:0"})
+	if err := s.Start(); err == nil {
+		t.Fatal("Start() error = nil, want listen error")
+	} else if !strings.Contains(err.Error(), "failed to net Listen") {
+		t.Fatalf("Start() error = %v, want listen context", err)
 	}
 }
 
