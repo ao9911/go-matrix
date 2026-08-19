@@ -110,22 +110,8 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func (s *Server) Stop(ctx context.Context) error {
-	stopped := make(chan struct{})
-	go func() {
-		s.server.GracefulStop()
-		close(stopped)
-	}()
-
-	select {
-	case <-stopped:
-		log.Info("grpc server graceful stop completed")
-		return nil
-	case <-ctx.Done():
-		log.Warn("grpc server graceful stop timeout, forcing stop")
-		s.server.Stop()
-		return ctx.Err()
-	}
+func (s *Server) Stop(ctx context.Context) {
+	s.server.GracefulStop()
 }
 
 func (s *Server) Use(interceptors ...grpc.UnaryServerInterceptor) *Server {
