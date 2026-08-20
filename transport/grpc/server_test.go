@@ -22,6 +22,13 @@ var (
 	server    *Server
 )
 
+type preStartService interface{}
+
+var preStartServiceDesc = grpcgo.ServiceDesc{
+	ServiceName: "test.PreStart",
+	HandlerType: (*preStartService)(nil),
+}
+
 func init() {
 	serverCfg = &ServerConfig{
 		Network:           "tcp",
@@ -95,6 +102,26 @@ func TestServerServeAndStop(t *testing.T) {
 		t.Fatalf("health status = %s, want SERVING", resp.Status)
 	}
 
+	s.Stop(ctx)
+}
+
+func TestServerAllowsPreStartRegistration(t *testing.T) {
+	s := NewServer(&ServerConfig{Addr: "127.0.0.1:0"})
+	raw := s.Server()
+	if raw == nil {
+		t.Fatal("Server() returned nil before Start()")
+	}
+	raw.RegisterService(&preStartServiceDesc, struct{}{})
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if got := s.Server(); got != raw {
+		t.Fatal("Start() replaced the registered grpc server")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	s.Stop(ctx)
 }
 

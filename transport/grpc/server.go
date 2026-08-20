@@ -56,6 +56,12 @@ func NewServer(c *ServerConfig, opts ...grpc.ServerOption) *Server {
 }
 
 func (s *Server) buildServer() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.server != nil {
+		return
+	}
+
 	kp := grpc.KeepaliveParams(keepalive.ServerParameters{
 		MaxConnectionIdle:     15 * time.Second, // If a client is idle for 15 seconds, send a GOAWAY
 		MaxConnectionAge:      30 * time.Second, // If any connection is alive for more than 30 seconds, send a GOAWAY
@@ -92,6 +98,7 @@ func (s *Server) buildServer() {
 	s.server = grpc.NewServer(opts...)
 	s.healthServer = health.NewServer()
 	healthpb.RegisterHealthServer(s.server, s.healthServer)
+	reflection.Register(s.server)
 }
 
 func (s *Server) Start() error {
@@ -100,7 +107,6 @@ func (s *Server) Start() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to net Listen")
 	}
-	reflection.Register(s.server)
 	go func() {
 		log.Infof("grpc server succeed listening at %v", l.Addr())
 		if err := s.server.Serve(l); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -124,6 +130,7 @@ func (s *Server) Serve(lis net.Listener) error {
 }
 
 func (s *Server) Server() *grpc.Server {
+	s.buildServer()
 	return s.server
 }
 
